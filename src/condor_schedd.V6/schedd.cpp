@@ -11851,7 +11851,7 @@ Scheduler::spawnJobHandlerRaw( shadow_rec* srec, const char* path,
 		job_ad->InsertAttr( ATTR_PROC_ID, job_id.proc );
 
 		// Let the EP know that this EP's sandbox must not be hide-mounted.
-		job_ad->InsertAttr( "IsTransferShadow", true );
+		job_ad->InsertAttr( ATTR_IS_TRANSFER_SHADOW, true );
 
 		AssignClassAdListOfStrings(
 			* job_ad, ATTR_TRANSFER_THESE_CATALOGS,

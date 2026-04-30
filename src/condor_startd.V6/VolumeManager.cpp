@@ -299,7 +299,7 @@ isHideMountCompatible(const ClassAd& jobAd, const ClassAd& machineAd) {
     // We can't hide the mounts of a job provisioning a common file catalog.
     //
     bool is_transfer_shadow = false;
-    if ( jobAd.LookupBool( "IsTransferShadow", is_transfer_shadow ) && is_transfer_shadow ) {
+    if ( jobAd.LookupBool( ATTR_IS_TRANSFER_SHADOW, is_transfer_shadow ) && is_transfer_shadow ) {
         return false;
     }
 
