@@ -669,9 +669,8 @@ Starter::handleJobSetupCommand(
 				return true;
 			}
 
-			dprintf( D_ZKM, "Will map common files %s at %s\n", cifName.c_str(), stagingDir.c_str() );
-			const bool OUTER = false;
-			std::filesystem::path sandbox( s->GetWorkingDir(OUTER) );
+			dprintf( D_ZKM, "Will map common files %s at %s\n", cifName.c_str(), location.string().c_str() );
+			std::filesystem::path sandbox( s->GetWorkingDir(WD::OUTER) );
 			dprintf( D_ALWAYS, "Mapping common files into job's initial working directory...\n" );
 			std::error_code errorCode = staging->map( sandbox );
 
