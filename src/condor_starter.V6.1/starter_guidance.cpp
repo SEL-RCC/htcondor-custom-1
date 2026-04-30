@@ -490,8 +490,7 @@ Starter::handleJobSetupCommand(
 			// from the LV.  Since common files really should staged to the
 			// LV, `staging` must always be a subdirectory.
 			// std::filesystem::path executeDir( s->GetSlotDir() );
-			const bool OUTSIDE = false;
-			std::filesystem::path executeDir( s->GetWorkingDir(OUTSIDE) );
+			std::filesystem::path executeDir( s->GetWorkingDir(WD::OUTER) );
 			std::filesystem::path parentDir = executeDir / "staging";
 
 			StagingDirectoryFactory sdf;
@@ -669,7 +668,7 @@ Starter::handleJobSetupCommand(
 				return true;
 			}
 
-			dprintf( D_ZKM, "Will map common files %s at %s\n", cifName.c_str(), location.string().c_str() );
+			dprintf( D_ZKM, "Will map common files %s at %s\n", cifName.c_str(), stagingDir.c_str() );
 			std::filesystem::path sandbox( s->GetWorkingDir(WD::OUTER) );
 			dprintf( D_ALWAYS, "Mapping common files into job's initial working directory...\n" );
 			std::error_code errorCode = staging->map( sandbox );
