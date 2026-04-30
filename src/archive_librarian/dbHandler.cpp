@@ -12,6 +12,7 @@
 #include "condor_common.h"
 #include "condor_config.h"
 #include "condor_debug.h"
+#include "condor_attributes.h"
 
 #include <filesystem>
 #include <functional>
@@ -58,14 +59,25 @@ bool DBHandler::initialize() {
     }
 
 #ifndef _WIN32
-    if (chmod(config[conf::str::DBPath].c_str(), 0644) != 0) {
-        dprintf(D_ERROR, "DBHandler::initialize: failed to set permissions on '%s': %s\n",
-                config[conf::str::DBPath].c_str(), strerror(errno));
+    // Best effort set database file permissions (readable by all, writable by librarian).
+    // Open with O_NOFOLLOW (safe_open_wrapper, no _follow) so that if the path has been
+    // replaced with a symlink since sqlite3_open, the open fails rather than following it.
+    const std::string& db_path = config[conf::str::DBPath];
+    int fd = safe_open_wrapper(db_path.c_str(), O_RDONLY, 0);
+    if (fd == -1) {
+        dprintf(D_ERROR, "DBHandler::initialize: failed to open '%s' to set permissions: %s\n",
+                db_path.c_str(), strerror(errno));
+    } else {
+        if (fchmod(fd, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) == -1) {
+            dprintf(D_ERROR, "DBHandler::initialize: failed to set permissions on '%s': %s\n",
+                db_path.c_str(), strerror(errno));
+        }
+        close(fd);
     }
 #endif
 
     char* errMsg = nullptr;
-    int rc;
+    int rc = 0;
 
     rc = sqlite3_exec(db_, "PRAGMA journal_mode=WAL;", nullptr, nullptr, &errMsg);
     if (rc != SQLITE_OK) {
@@ -427,10 +439,10 @@ bool DBHandler::batchInsertJobRecords(const std::vector<ArchiveRecord>& records,
         int clusterId = 0, procId = 0;
         long completionDate = 0;
         std::string owner;
-        rec.Banner().LookupInteger("ClusterId",      clusterId);
-        rec.Banner().LookupInteger("ProcId",         procId);
-        rec.Banner().LookupInteger("CompletionDate", completionDate);
-        rec.Banner().LookupString( "Owner",          owner);
+        rec.Banner().LookupInteger(ATTR_CLUSTER_ID, clusterId);
+        rec.Banner().LookupInteger(ATTR_PROC_ID, procId);
+        rec.Banner().LookupInteger(ATTR_COMPLETION_DATE, completionDate);
+        rec.Banner().LookupString(ATTR_OWNER, owner);
         int64_t offset = rec.GetRecordOffset();
 
         int jobId, jobListId;
