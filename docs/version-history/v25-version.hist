@@ -4,6 +4,13 @@
   SQLite3 database of indexes to historical job records located in an Access
   Point's :macro:`HISTORY` archive.
   :jira:`3143`
+- Scheduler universe jobs no longer have their argv[0] set to
+  ``condor_scheduniv_exec.<cluster>.<proc>``, and instead preserve the
+  executable name (``a_out_name``). This means that so-called "multibin"
+  programs, like often created from go or rust source and have many
+  executables linked into one static binary, and dispatch based on argv[0]
+  now work as scheduler universe jobs.
+  :jira:`3711`
 
 - Updated :tool:`condor_watch_q` to automatically group jobs by :ad-attr:`JobBatchName`
   correctly for jobs submitted after the tool began executing. The incorrect
@@ -16,11 +23,28 @@
   throughout the lifetime of a daemon.
   :jira:`3687`
 
+- :tool:`condor_config_val` now accepts a ``-trace`` option which prints the file, line and previous value
+  each time a value is replaced as the configuration files are read.
+  :jira:`3699`
+
+- :tool:`condor_userprio` ``-setceiling`` now accepts a ``-duration`` option
+  to install a time-limited ceiling *lease*: the prior ceiling is
+  automatically restored after the given number of seconds. Leases are
+  persistent across *condor_negotiator* restarts. A new
+  ``-cancelceilinglease`` option cancels an in-effect lease.
+  :jira:`3518`
+
+- The *condor_startd* has a new activity ``"Cleaning"`` on claimed slots.
+
 *** 25.11.0 bugs
 
 *** 25.0.11 bugs
 
-*** 25.10.0 features
+- Fix a recently introduced bug where a parallel universe job that cannot activate one
+  of its claims can cause the *condor_schedd* to crash.
+  :jira:`3704`
+
+*** 25.10.1 features
 
 - Added ability to set DAGMan throttles via :tool:`htcondor dag throttle` and
   :meth:`htcondor2.DAGMan.throttle` while DAGMan is executing.
@@ -115,7 +139,7 @@
   the command line, if the submitter is an active submitter in the 
   *condor_collector* fallback to look again at the non-active 
   submitters in the negotiator.
-  :jira;`3283`
+  :jira:`3283`
 
 - :tool:`condor_qusers`, :tool:`condor_status`, and :tool:`condor_who` now supports an `-aaf` option, for append
   autoformat, which displays columns like the `-af` option does, but
@@ -126,7 +150,12 @@
   job exit.
   :jira:`3653`
 
-*** 25.10.0 bugs
+*** 25.10.1 bugs
+
+*** 25.0.10 features
+
+- Add Ubuntu 26.04 (Resolute Raccoon) support.
+  :jira:`3703`
 
 *** 25.0.10 bugs
 
