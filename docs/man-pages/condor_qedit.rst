@@ -70,7 +70,7 @@ Options
     requested edit would be permitted. Useful for checking which
     attributes are protected or otherwise not editable before performing
     the actual update. Requires a *condor_schedd* that supports the
-    ``-dry-run`` query.
+    **-dry-run** query.
  **-n** *schedd-name*
     Modify job attributes in the queue of the specified schedd
  **-pool** *pool-name*
