@@ -193,5 +193,5 @@ LIBRARIAN_DATABASE = $(LOCAL_DIR)/librarian.db
 
 ## Related Links
 
-- Project Report: [https://docs.google.com/document/d/1msO0zYkLzXs1MPPRfWmt5gBZxX1ZGw8SQpbsSJojxdo/edit?usp=sharing](link will only work within UW Madison workspace emails)
-- CHTC Fellowship Website: [https://chtc.cs.wisc.edu/fellowships/reports/2025/sandhya-nayar](Final Report)
+- Project Report: [https://docs.google.com/document/d/1msO0zYkLzXs1MPPRfWmt5gBZxX1ZGw8SQpbsSJojxdo/edit?usp=sharing] (link will only work within UW Madison workspace emails)
+- CHTC Fellowship Website: [https://chtc.cs.wisc.edu/fellowships/reports/2025/sandhya-nayar] (Final Report)
