@@ -1624,8 +1624,6 @@ Dag::SubmitReadyNodes(const Dagman &dm)
 					ProcessFailedSubmit(node, max_attempts, error);
 					break_loop = true;
 					break;
-				default:
-					EXCEPT("Illegal submit result: %d", static_cast<int>(result));
 			}
 
 			if (break_loop) { break; }

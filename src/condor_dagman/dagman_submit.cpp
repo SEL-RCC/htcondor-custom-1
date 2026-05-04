@@ -647,10 +647,8 @@ DirectSubmit::SubmitInternal(Node& node, CondorID& condorID, std::string& err) {
 	{
 		int cluster_id = MyQ->get_NewCluster(*submitHash.error_stack());
 		if (cluster_id < 0) {
-			rval = cluster_id;
-			if (rval >= -7) {
-				result = SubmitResult::FAILURE;
-			}
+			rval = cluster_id;s
+			result = SubmitResult::FAILURE;
 			goto finis;
 		}
 

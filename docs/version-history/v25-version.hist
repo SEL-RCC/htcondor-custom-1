@@ -6,7 +6,7 @@
   :jira:`3143`
 
 - DAGMan will no longer re-attempt placement of jobs to the *condor_schedd*
-  when submission will never work such as when a borked job description file
+  when submission will never work such as when an invalid job description file
   is provided to a node. Note, this only occurs when DAGMan is in direct
   submission mode (default).
   :jira:`3716`
