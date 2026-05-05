@@ -25,6 +25,10 @@
   execution.
   :jira:`3656`
 
+- Changed the default value of :macro:`QUEUE_CLEAN_INTERVAL` to 28800
+  (8 hours).
+  :jira:`3706`
+
 - Added the ability for the `condor_gangliad` to aggregate the derivatives (deltas) of classad attributes. This is useful
   to monitor numeric attributes that are "counters", i.e. attributes that start at zero and monotonically increase
   throughout the lifetime of a daemon.
