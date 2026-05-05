@@ -6,6 +6,11 @@
   immediately.
   :jira:`3709`
 
+- Fixed a bug where the job lease duration was based on when the TCP
+  connection to the EP was lost, when it should be based on the last time
+  a message was successfully exchanged with the EP.
+  :jira:`3724`
+
 *** 24.0.20 features
 
 - HTCondor tarballs now contain `Pelican 7.24.2 <https://pelicanplatform.org/releases>`_
