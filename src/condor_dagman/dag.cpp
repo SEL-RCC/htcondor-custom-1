@@ -55,6 +55,7 @@ Dag::Dag(const Dagman& dm, bool isSplice, const std::string &spliceScope) :
 	config                 (dm.config),
 	throttles              (dm.throttles),
 	_schedd                (dm._schedd),
+	submitter              (dm.submitter),
 	_metrics               (dm.metrics),
 	_DAGManJobId           (&dm.DAGManJobId),
 	_spliceScope           (spliceScope),
@@ -222,7 +223,7 @@ bool Dag::Bootstrap(bool recovery)
 			}
 		}
 
-		set_fake_condorID(_recoveryMaxfakeID);
+		submitter->SetFakeId(_recoveryMaxfakeID);
 
 		debug_cache_stop_caching();
 
@@ -1607,20 +1608,25 @@ Dag::SubmitReadyNodes(const Dagman &dm)
 			// constructor here.  wenger 2015-09-25
 			CondorID condorID(0, 0, 0);
 			std::string error;
-			submit_result_t submit_result = SubmitNodeJob(dm, node, condorID, error);
-	
-			// Note: if instead of switch here so we can use break
-			// to break out of while loop.
-			if (submit_result == SUBMIT_RESULT_OK) {
-				ProcessSuccessfulSubmit(node, condorID);
-				numSubmitsThisCycle++;
+			bool break_loop = false;
+			int max_attempts = config[conf::i::MaxSubmitAttempts];
 
-			} else if (submit_result == SUBMIT_RESULT_FAILED || submit_result == SUBMIT_RESULT_NO_SUBMIT) {
-				ProcessFailedSubmit(node, config[conf::i::MaxSubmitAttempts], error);
-				break; // break out of while loop
-			} else {
-				EXCEPT("Illegal submit_result_t value: %d", submit_result);
+			SubmitResult result = SubmitNodeJob(dm, node, condorID, error);
+			switch (result) {
+				case SubmitResult::SUCCESS:
+					ProcessSuccessfulSubmit(node, condorID);
+					numSubmitsThisCycle++;
+					break;
+				case SubmitResult::FAILURE:
+					max_attempts = 0; // Short circuit ProcessFailedSubmit to fail node now
+					[[fallthrough]];
+				case SubmitResult::RETRY:
+					ProcessFailedSubmit(node, max_attempts, error);
+					break_loop = true;
+					break;
 			}
+
+			if (break_loop) { break; }
 		}
 	}
 
@@ -1629,7 +1635,9 @@ Dag::SubmitReadyNodes(const Dagman &dm)
 	if (numSubmitsThisCycle > 0 && !dagOpts[shallow::b::DryRun]) {
 		// If DAGMan submitted jobs without error invalidate state for queue checking
 		_validatedState = false;
-		send_reschedule(dm);
+		if ( ! submitter->Reschedule()) {
+			debug_printf(DEBUG_NORMAL, "Warning: Failed to send reschedule to schedd\n");
+		}
 	}
 
 	// Put any deferred nodes back into the ready queue for next time.
@@ -1688,9 +1696,7 @@ Dag::PreScriptReaper(Node *node, int status)
 			             node->GetReturnValue(), node->GetNodeName() );
 
 			// Mark the node as a skipped node.
-			CondorID id;
-			std::string logFile = DefaultNodeLog();
-			if ( ! writePreSkipEvent(id, node, node->GetNodeName(), node->GetDirectory(), logFile.c_str())) {
+			if ( ! submitter->PreSkipSubmit(*node, DefaultNodeLog())) {
 				debug_printf(DEBUG_NORMAL, "Failed to write PRE_SKIP event for node %s\n",
 				             node->GetNodeName());
 				main_shutdown_rescue(EXIT_ERROR, DAG_STATUS_ERROR);
@@ -3244,37 +3250,49 @@ Dag::LogEventNodeLookup(const ULogEvent* event, bool &submitEventIsSane)
 	// a submit event.
 	if (event->eventNumber == ULOG_SUBMIT) {
 		const SubmitEvent* submit_event = (const SubmitEvent*)event;
-		if ( ! submit_event->submitEventLogNotes.empty()) {
-			char nodeName[1024] = "";
-			if (sscanf(submit_event->submitEventLogNotes.c_str(), "DAG Node: %1023s", nodeName) == 1) {
-				node = FindNodeByName(nodeName);
-				if (node) {
-					submitEventIsSane = SanityCheckSubmitEvent(condorID, node);
-					node->SetCondorID(condorID);
+		std::string nodeName;
 
-					// Insert this node into the CondorID->node hash
-					// table if we don't already have it (e.g., recovery
-					// mode).  (In "normal" mode we should have already
-					// inserted it when we did the condor_submit.)
-					bool isNoop = NodeIsNoop(condorID);
-					ASSERT(isNoop == node->GetNoop());
-					int id = GetIndexID(condorID);
-					std::map<int, Node*> *ht = GetEventIDHash(isNoop);
-					auto findResult = ht->find(id);
-					if (findResult == ht->end()) {
-						// Node not found.
-						auto insertResult = ht->emplace(id, node);
-						ASSERT(insertResult.second == true);
-					} else {
-						// Node was found.
-						ASSERT((*findResult).second == node);
-					}
-				}
-			} else {
-				debug_printf(DEBUG_QUIET, "ERROR: 'DAG Node:' not found in submit event notes: <%s>\n",
-				             submit_event->submitEventLogNotes.c_str());
+		if (submit_event->hasStructuredNotes()) {
+			submit_event->structuredNotes->LookupString(ATTR_DAG_NODE_NAME, nodeName);
+		}
+
+		// Fall back to old method (We need this for fake condor submits i.e. no-ops)
+		if (nodeName.empty() && ! submit_event->submitEventLogNotes.empty()) {
+			char buf[1024] = "";
+			if (sscanf(submit_event->submitEventLogNotes.c_str(), "DAG Node: %1023s", buf) == 1) {
+				nodeName = buf;
 			}
 		}
+
+		if (nodeName.empty()) {
+			debug_printf(DEBUG_QUIET, "ERROR: DAG node name not located in submit event!\n");
+			return nullptr;
+		}
+
+		node = FindNodeByName(nodeName.c_str());
+		if (node) {
+			submitEventIsSane = SanityCheckSubmitEvent(condorID, node);
+			node->SetCondorID(condorID);
+
+			// Insert this node into the CondorID->node hash
+			// table if we don't already have it (e.g., recovery
+			// mode).  (In "normal" mode we should have already
+			// inserted it when we did the condor_submit.)
+			bool isNoop = NodeIsNoop(condorID);
+			ASSERT(isNoop == node->GetNoop());
+			int id = GetIndexID(condorID);
+			std::map<int, Node*> *ht = GetEventIDHash(isNoop);
+			auto findResult = ht->find(id);
+			if (findResult == ht->end()) {
+				// Node not found.
+				auto insertResult = ht->emplace(id, node);
+				ASSERT(insertResult.second == true);
+			} else {
+				// Node was found.
+				ASSERT((*findResult).second == node);
+			}
+		}
+
 		return node;
 	}
 
@@ -3317,39 +3335,50 @@ Dag::LogEventNodeLookup(const ULogEvent* event, bool &submitEventIsSane)
 
 	if (event->eventNumber == ULOG_CLUSTER_SUBMIT) {
 		const ClusterSubmitEvent* cluster_submit_event = (const ClusterSubmitEvent*)event;
-		if ( ! cluster_submit_event->submitEventLogNotes.empty()) {
-			char nodeName[1024] = "";
-			if (sscanf(cluster_submit_event->submitEventLogNotes.c_str(), "DAG Node: %1023s", nodeName) == 1) {
-				node = FindNodeByName(nodeName);
-				if (node) {
-					submitEventIsSane = SanityCheckSubmitEvent(condorID, node);
-					node->SetCondorID( condorID );
 
-					// Insert this node into the CondorID->node hash
-					// table if we don't already have it (e.g., recovery
-					// mode).  (In "normal" mode we should have already
-					// inserted it when we did the condor_submit.)
-					bool isNoop = NodeIsNoop(condorID);
-					ASSERT(isNoop == node->GetNoop());
-					int id = GetIndexID(condorID);
-					std::map<int, Node*> *ht = GetEventIDHash(isNoop);
-					auto findResult = ht->find(id);
-					// std::map::find() returns an iterator pointing to the desired element, or end() if not found
-					if (findResult == ht->end()) {
-						// Node not found.
-						auto insertResult = ht->emplace(id, node);
-						// std::map::insert() returns a pair, second element is the success bool
-						ASSERT(insertResult.second == true);
-					} else {
-						// Node was found.
-						ASSERT((*findResult).second == node);
-					}
-				}
-			} else {
-				debug_printf(DEBUG_QUIET, "ERROR: 'DAG Node:' not found in cluster submit event notes: <%s>\n",
-				             cluster_submit_event->submitEventLogNotes.c_str());
+		std::string nodeName;
+
+		if (cluster_submit_event->hasStructuredNotes()) {
+			cluster_submit_event->structuredNotes->LookupString(ATTR_DAG_NODE_NAME, nodeName);
+		}
+
+		// Fall back to old method
+		if (nodeName.empty() && ! cluster_submit_event->submitEventLogNotes.empty()) {
+			char buf[1024] = "";
+			if (sscanf(cluster_submit_event->submitEventLogNotes.c_str(), "DAG Node: %1023s", buf) == 1) {
+				nodeName = buf;
 			}
 		}
+
+		if (nodeName.empty()) {
+			debug_printf(DEBUG_QUIET, "ERROR: DAG node name not located in cluster submit event!\n");
+			return nullptr;
+		}
+
+		node = FindNodeByName(nodeName.c_str());
+		if (node) {
+			submitEventIsSane = SanityCheckSubmitEvent(condorID, node);
+			node->SetCondorID(condorID);
+
+			// Insert this node into the CondorID->node hash
+			// table if we don't already have it (e.g., recovery
+			// mode).  (In "normal" mode we should have already
+			// inserted it when we did the condor_submit.)
+			bool isNoop = NodeIsNoop(condorID);
+			ASSERT(isNoop == node->GetNoop());
+			int id = GetIndexID(condorID);
+			std::map<int, Node*> *ht = GetEventIDHash(isNoop);
+			auto findResult = ht->find(id);
+			if (findResult == ht->end()) {
+				// Node not found.
+				auto insertResult = ht->emplace(id, node);
+				ASSERT(insertResult.second == true);
+			} else {
+				// Node was found.
+				ASSERT((*findResult).second == node);
+			}
+		}
+
 		return node;
 	}
 	return node;
@@ -3478,11 +3507,9 @@ Dag::GetEventIDHash(bool isNoop) const
 }
 
 //---------------------------------------------------------------------------
-Dag::submit_result_t
+SubmitResult
 Dag::SubmitNodeJob(const Dagman &dm, Node *node, CondorID &condorID, std::string& err)
 {
-	submit_result_t result = SUBMIT_RESULT_NO_SUBMIT;
-
 	// Resetting the HTCondor ID here fixes PR 799.  wenger 2007-01-24.
 	if (node->GetCluster() != _defaultCondorId._cluster) {
 		// Remove the "previous" HTCondor ID for this node from
@@ -3509,28 +3536,21 @@ Dag::SubmitNodeJob(const Dagman &dm, Node *node, CondorID &condorID, std::string
 		if (dagmanUtils.runSubmitDag(dm.inheritOpts, node->GetDagFile(), node->GetDirectory(), node->GetEffectivePrio(), isRetry) != 0) {
 			node->AttemptedSubmit();
 			debug_printf(DEBUG_QUIET, "ERROR: condor_submit_dag -no_submit failed for node %s.\n", node->GetNodeName());
-			// Hmm -- should this be a node failure, since it probably
-			// won't work on retry?  wenger 2010-03-26
 			err = "Failed to submit Sub-DAG";
-			return SUBMIT_RESULT_NO_SUBMIT;
+			return SubmitResult::FAILURE;
 		}
 	}
 
 	debug_printf(DEBUG_NORMAL, "Submitting HTCondor Node %s job(s)...\n", node->GetNodeName());
 
-	bool submit_success = false;
-	std::string logFile = DefaultNodeLog();
-
 	node->AttemptedSubmit();
+
+	std::string logFile;
 	if (node->GetNoop()) {
-		submit_success = fake_condor_submit(condorID, 0, node->GetNodeName(), node->GetDirectory(), logFile.c_str());
-	} else {
-		submit_success = condor_submit(dm, node, condorID, err);
+		logFile = DefaultNodeLog();
 	}
 
-	result = submit_success ? SUBMIT_RESULT_OK : SUBMIT_RESULT_FAILED;
-
-	return result;
+	return submitter->Submit(*node, condorID, err, logFile);
 }
 
 //---------------------------------------------------------------------------
@@ -3642,8 +3662,9 @@ Dag::ProcessFailedSubmit(Node *node, int max_submit_attempts, std::string err)
 		//If no post script ran then set all descendants to Futile
 		if ( ! ranPostScript) { _numNodesFutile += node->SetDescendantsToFutile(*this); }
 	} else {
-		// We have more submit attempts left, put this node back into the
-		// ready queue.
+		// We have more submit attempts left, put this node back into the ready queue.
+		dprintf(D_TEST, "Node %s submit failed %d/%d. RETRYING NODE SUBMISSION\n",
+		        node->GetNodeName(), node->GetSubmitAttempts(), max_submit_attempts);
 		debug_printf(DEBUG_NORMAL, "Job submit try %d/%d failed, will try again in >= %d second%s.\n",
 		             node->GetSubmitAttempts(), max_submit_attempts, thisSubmitDelay, thisSubmitDelay == 1 ? "" : "s");
 

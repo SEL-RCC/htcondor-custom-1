@@ -5628,6 +5628,19 @@ Scheduler::spawnJobHandler( int cluster, int proc, shadow_rec* srec )
 	dprintf( D_ALWAYS, "match for job %d.%d was deleted - not "
 			 "forking a shadow\n", srec->job_id.cluster,
 			 srec->job_id.proc );
+
+		// For MPI/PARALLEL jobs we still hold a DedicatedScheduler
+		// AllocationNode for this cluster. The shadow-death cleanup
+		// path (DedicatedScheduler::removeAllocation) never runs here
+		// because no shadow was ever spawned. Drop the allocation now
+		// so the cluster can be rematched; otherwise the next
+		// DedicatedScheduler::createAllocations() for this cluster
+		// would ASSERT on the duplicate map entry and EXCEPT the schedd.
+	if( universe == CONDOR_UNIVERSE_MPI ||
+	    universe == CONDOR_UNIVERSE_PARALLEL ) {
+		dedicated_scheduler.removeOrphanedAllocation( srec->job_id.cluster );
+	}
+
 	mark_job_stopped( srec->job_id );
 	delete_shadow_rec( srec );
 	return false;
@@ -5832,6 +5845,24 @@ Scheduler::WriteSubmitToUserLog(const JobQueueJob* job, bool do_fsync, const cha
 	job->LookupString(ATTR_SUBMIT_EVENT_USER_NOTES, event.submitEventUserNotes);
 	if ( warning != NULL && warning[0] ) {
 		event.submitEventWarnings = warning;
+	}
+
+	std::string structuredAttrs;
+	job->LookupString(ATTR_SUBMIT_EVENT_NOTES_ATTRS, structuredAttrs);
+	if ( ! structuredAttrs.empty()) { structuredAttrs += ","; }
+	structuredAttrs += ATTR_DAG_NODE_NAME "," ATTR_JOB_BATCH_NAME;
+
+	// Copy the fully evaluated classad expression if found
+	for (const auto& attr : StringTokenIterator(structuredAttrs)) {
+		classad::Value val;
+		if (job->EvaluateAttr(attr, val)) {
+			if ( ! val.IsUndefinedValue() && ! val.IsErrorValue()) {
+				ExprTree *lit = classad::Literal::MakeLiteral(val);
+				if (lit) {
+					event.setStructuredNotes().Insert(attr, lit);
+				}
+			}
+		}
 	}
 
 	bool status = false;
@@ -6146,6 +6177,24 @@ Scheduler::WriteClusterSubmitToUserLog(const JobQueueCluster* cluster, bool do_f
 	event.setSubmitHost( daemonCore->privateNetworkIpAddr() );
 	cluster->LookupString(ATTR_SUBMIT_EVENT_NOTES, event.submitEventLogNotes);
 	cluster->LookupString(ATTR_SUBMIT_EVENT_USER_NOTES, event.submitEventUserNotes);
+
+	std::string structuredAttrs;
+	cluster->LookupString(ATTR_SUBMIT_EVENT_NOTES_ATTRS, structuredAttrs);
+	if ( ! structuredAttrs.empty()) { structuredAttrs += ","; }
+	structuredAttrs += ATTR_DAG_NODE_NAME "," ATTR_JOB_BATCH_NAME;
+
+	// Copy the fully evaluated classad expression if found
+	for (const auto& attr : StringTokenIterator(structuredAttrs)) {
+		classad::Value val;
+		if (cluster->EvaluateAttr(attr, val)) {
+			if ( ! val.IsUndefinedValue() && ! val.IsErrorValue()) {
+				ExprTree *lit = classad::Literal::MakeLiteral(val);
+				if (lit) {
+					event.setStructuredNotes().Insert(attr, lit);
+				}
+			}
+		}
+	}
 
 	bool status = false;
 	if (do_fsync) {
@@ -11260,6 +11309,10 @@ void VanillaMatchAd::Init(ClassAd* slot_ad, const OwnerInfo* powni, JobQueueJob 
 	}
 }
 
+VanillaMatchAd::~VanillaMatchAd() {
+	Reset();
+}
+
 void VanillaMatchAd::Reset()
 {
 	std::string slot_attr("SLOT");
@@ -11800,6 +11853,9 @@ Scheduler::spawnJobHandlerRaw( shadow_rec* srec, const char* path,
 	if( isTransferShadowProcID( job_id.proc ) ) {
 		// This `job_ad` has the prompting job's ID.
 		job_ad->InsertAttr( ATTR_PROC_ID, job_id.proc );
+
+		// Let the EP know that this EP's sandbox must not be hide-mounted.
+		job_ad->InsertAttr( ATTR_IS_TRANSFER_SHADOW, true );
 
 		AssignClassAdListOfStrings(
 			* job_ad, ATTR_TRANSFER_THESE_CATALOGS,
@@ -12483,10 +12539,7 @@ Scheduler::start_sched_universe_job(const PROC_ID & job_id)
 		}
 	}
 
-	// Don't use a_out_name for argv[0], use
-	// "condor_scheduniv_exec.cluster.proc" instead. 
-	formatstr(argbuf,"condor_scheduniv_exec.%d.%d",job_id.cluster,job_id.proc);
-	args.AppendArg(argbuf);
+	args.AppendArg(a_out_name);
 
 	if(!args.AppendArgsFromClassAd(userJob,error_msg)) {
 		dprintf(D_ALWAYS,"Failed to read job arguments: %s\n",
