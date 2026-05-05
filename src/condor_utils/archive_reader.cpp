@@ -368,8 +368,10 @@ ArchiveReader::FillBackwardBuffer() {
 	int64_t chunk_base = m_bwd_pos - read_size;
 
 	if (fseek_64b(m_file.get(), chunk_base, SEEK_SET) != 0) {
+		int saved_errno = errno;
+		m_error = saved_errno;
 		dprintf(D_ERROR, "ERROR: Failed to seek to chunk border %llu in archive file (%d): %s\n",
-		        (unsigned long long)chunk_base, errno, strerror(errno));
+		        (unsigned long long)chunk_base, m_error, strerror(m_error));
 		return false;
 	}
 
