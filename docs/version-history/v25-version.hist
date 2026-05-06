@@ -59,7 +59,7 @@
 - Docker universe jobs that also had a credential being refreshed
   that also exhausted their :subcom:`RequestMemory` would not go
   on hold immediately, but only after a 20 minute delay.
-  :jira:`3621`
+  :jira:`3672`
 
 *** 25.11.0 bugs
 
