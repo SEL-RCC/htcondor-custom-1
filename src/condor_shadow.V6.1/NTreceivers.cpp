@@ -2442,11 +2442,11 @@ case CONDOR_getdir:
 		result = ( syscall_sock->end_of_message() );
 		ON_ERROR_RETURN( result );
 		// put_x509_delegation() currently only returns 0 (success) or
-		// -1 (failure); historically a -1 here triggered a shadow
-		// shutdown via the syscall-handler contract.
+		// -1 (failure on flush or x509_send_delegation); a failure is
+		// a network problem, so drop into reconnect mode.
 		switch (put_x509_rc) {
 			case 0:  return RemoteSyscallResult::SyscallOK;
-			case -1: return RemoteSyscallResult::ExpectedClose;
+			case -1: return RemoteSyscallResult::UnexpectedClose;
 		}
 		EXCEPT("put_x509_delegation() returned unexpected value %d", put_x509_rc);
 	}
