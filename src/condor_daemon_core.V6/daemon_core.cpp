@@ -11450,42 +11450,6 @@ DaemonCore::PidEntry::pipeFullWrite(int fd)
 	return 0;
 }
 
-void DaemonCore::send_invalidate_session ( const char* sinful, const char* sessid, const ClassAd* info_ad ) const {
-	if ( !sinful ) {
-		dprintf (D_SECURITY, "DC_AUTHENTICATE: couldn't invalidate session %s... don't know who it is from!\n", sessid);
-		return;
-	}
-
-	std::string the_msg = sessid;
-
-	// If given a non-empty ad, add it to our message.
-	// This extra information is understood in version 8.8.0
-	// and above.
-	if ( info_ad && info_ad->size() > 0 ) {
-		the_msg += "\n";
-		classad::ClassAdUnParser unparser;
-		unparser.Unparse(the_msg, info_ad);
-	}
-
-	classy_counted_ptr<Daemon> daemon = new Daemon(DT_ANY,sinful,NULL);
-
-	classy_counted_ptr<DCStringMsg> msg = new DCStringMsg(
-		DC_INVALIDATE_KEY,
-		the_msg.c_str() );
-
-	msg->setSuccessDebugLevel(D_SECURITY);
-	msg->setRawProtocol(true);
-
-	if( !daemon->hasUDPCommandPort() || m_invalidate_sessions_via_tcp ) {
-		msg->setStreamType(Stream::reli_sock);
-	}
-	else {
-		msg->setStreamType(Stream::safe_sock);
-	}
-
-	daemon->sendMsg( msg.get() );
-}
-
 
 void DaemonCore::SockPair::add_relisock() {
 	if(!m_rsock) {
