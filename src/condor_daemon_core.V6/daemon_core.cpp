@@ -291,7 +291,6 @@ DaemonCore::DaemonCore()
 	if( get_mySubSystem()->isType(SUBSYSTEM_TYPE_SHARED_PORT) ) {
 		m_wants_dc_udp_self = false;
 	}
-	m_invalidate_sessions_via_tcp = true;
 	m_use_udp_for_dc_signals = param_boolean("USE_UDP_FOR_DC_SIGNALS", false);
 #ifdef WIN32
 	m_never_use_kill_for_dc_signals = true;
@@ -3130,8 +3129,6 @@ DaemonCore::reconfig(void) {
 		m_use_clone_to_create_processes = false;
 	}
 #endif /* HAVE CLONE */
-
-	m_invalidate_sessions_via_tcp = param_boolean("SEC_INVALIDATE_SESSIONS_VIA_TCP", true);
 
 	// DaemonCore::Send_Signal behaviors
 	m_use_udp_for_dc_signals = param_boolean("USE_UDP_FOR_DC_SIGNALS", false);
