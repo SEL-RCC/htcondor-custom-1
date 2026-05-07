@@ -21,20 +21,6 @@
   like :subcom:`retry_request_memory` but for the ``Disk`` resource.
   :jira:`3552`
 
-- **batch** grid universe jobs are now run in the :ad-attr:`Iwd` or
-  :ad-attr:`RemoteIwd` directory by default. Before, they were run in a
-  temporary directory under the :ad-attr:`Iwd` or :ad-attr:`RemoteIwd`
-  directory.
-  The old behavior can be restored by setting ``blah_run_in_workdir=no``
-  in the ``blah.config`` file.
-  :jira:`2415`
-
-- Improved the *blahpd*'s efficiency in monitoring job status.
-  :jira:`3634,3640`
-
-- Improved handling of OS usernames that include the ``@`` character.
-  :jira:`3655`
-
 - When :macro:`STARTER_NESTED_SCRATCH` is true (the default), the .chirp.config
   file no longer pollutes the user's scratch directory, it is located
   in the slot's "user" directory.  The _CONDOR_CHIRP_CONFIG environment
@@ -54,6 +40,20 @@
 - Container universe jobs whose image is an url (like docker://) now work
   when file transfer is off.
   :jira:`3638`
+
+- **batch** grid universe jobs are now run in the :ad-attr:`Iwd` or
+  :ad-attr:`RemoteIwd` directory by default. Before, they were run in a
+  temporary directory under the :ad-attr:`Iwd` or :ad-attr:`RemoteIwd`
+  directory.
+  The old behavior can be restored by setting ``blah_run_in_workdir=no``
+  in the ``blah.config`` file.
+  :jira:`2415`
+
+- Improved the *blahpd*'s efficiency in monitoring job status.
+  :jira:`3634,3640`
+
+- Improved handling of OS usernames that include the ``@`` character.
+  :jira:`3655`
 
 - Added new submit variable ``$(JobListId)`` as an alternate name for ``$(ClusterId)``.
   :jira:`3586`
