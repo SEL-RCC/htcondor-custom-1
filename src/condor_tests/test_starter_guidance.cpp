@@ -294,7 +294,7 @@ test_main( int /* argv */, char ** /* argv */ ) {
     }
 
     dprintf( D_ALWAYS, "Testing requestGuidanceJobEnvironmentUnready()...\n" );
-    for( auto test_function : the_test_functions ) {
+    for( const auto& test_function : the_test_functions ) {
         MockStarter ms( test_function );
         Starter::requestGuidanceJobEnvironmentUnready( & ms );
         ASSERT( ms.sji_called && ! ms.jwuet_called );
