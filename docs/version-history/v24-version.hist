@@ -1,5 +1,9 @@
 *** 24.12.20 bugs
 
+- Fixed a bug that caused attempts to refresh a job's X.509 proxy file
+  spooled by the AP to fail.
+  :jira:`3660`
+
 - There are five configuration macros type as long integers.
   (:macro:`PREEN_COREFILE_MAX_SIZE`, :macro:`EVENT_LOG_MAX_SIZE`,
   :macro:`EVENT_LOG_MAX_ROTATIONS`, :macro:`ANNEX_DEFAULT_LEASE_DURATION`,
@@ -8,10 +12,6 @@
   by :data:`htcondor2.param`, and looking up large values (more than
   approximately 2 billion) will no longer cause the process to abort.
   :jira:`3616`
-
-- Fixed a bug that caused attempts to refresh a job's X.509 proxy file
-  spooled by the AP to fail.
-  :jira:`3660`
 
 - Messages in the StartLog when the *condor_startd* aborts because it
   cannot detect the amount of physical memory or when the amount of reserved
