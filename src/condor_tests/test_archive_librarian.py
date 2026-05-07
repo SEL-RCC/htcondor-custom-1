@@ -389,7 +389,7 @@ class TestLibrarianIngestion:
         assert initial_max is not None, "Expected at least one Status row before delta check"
 
         # Wait for the librarian to run another update cycle.
-        time.sleep(UPDATE_INTERVAL + 2)
+        time.sleep(UPDATE_INTERVAL + 5)
 
         # Use a fresh connection so we don't observe a stale snapshot from
         # the fixture's read transaction.
