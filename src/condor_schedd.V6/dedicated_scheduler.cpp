@@ -457,9 +457,11 @@ DedicatedScheduler::~DedicatedScheduler()
 	for (const auto& [cid, mrec] : pending_matches) {
 		delete mrec;
 	}
+	pending_matches.clear();
 	for (const auto& [cid, ad] : pending_requests) {
 		delete ad;
 	}
+	pending_requests.clear();
 
 		// Clear out the resource_requests queue
 	clearResourceRequests();  	// Delete classads in the queue
